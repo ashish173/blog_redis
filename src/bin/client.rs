@@ -1,15 +1,18 @@
+use std::fmt::Error;
+use std::io::ErrorKind;
+
 use bytes::BytesMut;
 use clap::{Parser, Subcommand};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 struct Cli {
     #[clap(subcommand)]
     command: Command,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 enum Command {
     Get { key: String },
     Set { key: String, value: String },
@@ -18,19 +21,28 @@ enum Command {
 #[tokio::main]
 pub async fn main() -> Result<(), std::io::Error> {
     let args = Cli::parse();
+    for i in 0..100 {
+        println!("in clinet loop ==={}",i);
+        client_process(args.clone(), i).await?;  
+    }
+    // client_process(args).await?;
+    Ok(())
+}
 
+async fn client_process(args: Cli, i: i32) -> Result<(), std::io::Error> {
     let mut stream = TcpStream::connect("127.0.0.1:8081").await.unwrap();
     match args.command {
         Command::Set { key, value } => {
             stream.write_all(b"set").await?;
             stream.write_all(b" ").await?;
 
-            stream.write_all(&key.as_bytes()).await?;
+            stream.write_all(i.to_string().as_bytes() ).await?;
             stream.write_all(b" ").await?;
 
             stream.write_all(&value.as_bytes()).await?;
             let mut buf = BytesMut::with_capacity(1024);
             let _length = stream.read_buf(&mut buf).await?;
+            println!("data read in buffer");
             match std::str::from_utf8(&mut buf) {
                 Ok(resp) => {
                     if resp == "r Ok" {
@@ -38,12 +50,15 @@ pub async fn main() -> Result<(), std::io::Error> {
                     } else if resp == "Ok" {
                         println!("key set");
                     }
+                    Ok(())
                 }
                 Err(err) => {
                     // failed to convert bytes into string slice
                     println!("error: {}", err);
+                    Err(std::io::Error::new(ErrorKind::InvalidData, "invalid data"))
                 }
             }
+            // Ok(())
         }
         Command::Get { key } => {
             stream.write_all(b"get").await?;
@@ -68,6 +83,4 @@ pub async fn main() -> Result<(), std::io::Error> {
             return Ok(());
         }
     }
-
-    Ok(())
 }
