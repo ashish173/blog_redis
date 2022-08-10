@@ -22,11 +22,11 @@ use crate::Listener;
 // }
 
 
-pub async fn run (listener: TcpListener) -> std::io::Result<()> {
-    let (notify_shutdown, _) = broadcast::channel(1);
-    let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
+pub async fn run (listener: &mut Listener) -> std::io::Result<()> {
+    // let (notify_shutdown, _) = broadcast::channel(1);
+    // let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
 
-    let listener = Listener::new(listener, notify_shutdown, shutdown_complete_tx, shutdown_complete_rx);
+    // let listener = Listener::new(listener, notify_shutdown, shutdown_complete_tx, shutdown_complete_rx);
     loop {
         // create my data, wrap it in a mutex, then add atomic reference couting
         // let my_data = Arc::new(Mutex::new(vec![1, 2, 3]));
@@ -44,20 +44,32 @@ pub async fn run (listener: TcpListener) -> std::io::Result<()> {
                     if let Err(_err) = process_method(&mut handle).await{
                         println!("Connection Error");
                     }
-                    // Ok(res)
+                    println!("process method completed");
                 });
             }
             // Ok(())
 }
 // async fn process_method (socket: &mut TcpStream, db: Db,) -> Result<(), std::io::Error>{
 async fn process_method (handle: &mut Handler) -> Result<(), std::io::Error>{
-    sleep(std::time::Duration::new(1, 0));
-    let mut buf = BytesMut::with_capacity(1024);
-    handle.stream.read_buf(&mut buf).await?;
-    let attrs = buffer_to_array(&mut buf);
-    let command = Command::get_command(&attrs[0]);
-    let res = process_query(command, attrs,  handle).await?;
-    Ok(res)
+    tokio::select! {
+        res = read_frame() => res,
+        _ = handle.listen_recv() => {
+            return Ok(());
+        }
+    }
+    
+    // sleep(std::time::Duration::new(1, 0));
+    // let mut buf = BytesMut::with_capacity(1024);
+    // handle.stream.read_buf(&mut buf).await?;
+    // let attrs = buffer_to_array(&mut buf);
+    // let command = Command::get_command(&attrs[0]);
+    // let res = process_query(command, attrs,  handle).await?;
+    // Ok(res)
+}
+
+async fn read_frame() -> std::io::Result<()> {
+    loop {}
+    Ok(())
 }
 
 async fn process_query(

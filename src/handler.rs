@@ -19,5 +19,15 @@ impl Handler {
 
         }
     }
+
+    pub async fn listen_recv(&mut self) {
+        if self.shutdown {
+            return;
+
+        }
+        println!("inside Listen_recv");
+        self.notify.recv().await;
+        self.shutdown = true;
+    } 
     
 }

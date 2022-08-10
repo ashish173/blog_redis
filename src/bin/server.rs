@@ -1,5 +1,5 @@
 use std::{fmt::Error, io::ErrorKind};
-
+use tokio::sync::{broadcast, mpsc};
 use blog_redis:: server;
 // use bytes::BytesMut;
 use tokio::{
@@ -16,42 +16,27 @@ use tokio::signal;
 pub async fn main() -> Result<(), std::io::Error> {
     let listener = TcpListener::bind("127.0.0.1:8081").await?;
     let shutdown = signal::ctrl_c();
+    let (notify_shutdown, _) = broadcast::channel(1);
+    let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
+
+    let mut listener = Listener::new(listener, notify_shutdown, shutdown_complete_tx, shutdown_complete_rx);
     tokio::select! {
-        res = server::run(listener) => {
+        res = server::run(&mut listener) => {
              if let Err(_err) = res {
                println!("failed to accept connection");               
             }
         }
         _ = shutdown => {
+            // println!("========{:?}", shut);
             println!("inside shutdown loop");
             
         }
     }
-    
-    // Tokio.select
-// let listener = Listener.listener;
+    println!("before notify shutdown drop");
+    drop(listener.notify_shutdown);
+    drop(listener.shutdown_complete_tx);
+    let _ = listener.shutdown_complete_rx.recv().await;
 
-    // let db = Listner;
-    // let entry_clone = db.clone();
-    // db.entries
-    // let entry_two = entry_clone.lock().unwrap().get(&"hello".to_string());
-    // loop {
-// create my data, wrap it in a mutex, then add atomic reference couting
-// let my_data = Arc::new(Mutex::new(vec![1, 2, 3]));
-
-// spawn a thread that will update the values
-// a clone of our Arc will be moved into the thread
-// let thread_arc = my_data.clone();
-
-
-    //     let (mut socket, _) = listener.accept().await?;
-    //     println!("loop run");
-    //     let  db_clone = db.clone();
-    //     tokio::spawn(async move{
-    //         process_method(&mut socket, db_clone).await;
-    //         // Ok(res)
-    //     });
-    // }
     Ok(())
 }
 

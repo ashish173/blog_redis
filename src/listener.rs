@@ -6,8 +6,8 @@ pub struct Listener {
     pub db : Db,
     listener: TcpListener,
     pub notify_shutdown: broadcast::Sender<()>,
-    shutdown_complete_rx: mpsc::Receiver<()>,
-    shutdown_complete_tx: mpsc::Sender<()>,
+    pub shutdown_complete_rx: mpsc::Receiver<()>,
+    pub shutdown_complete_tx: mpsc::Sender<()>,
 }
 
 impl Listener {
