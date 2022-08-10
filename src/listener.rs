@@ -1,17 +1,25 @@
-use tokio::{net::{TcpListener, TcpStream}, sync::{broadcast, mpsc}};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    sync::{broadcast, mpsc},
+};
 
 use crate::Db;
 
 pub struct Listener {
-    pub db : Db,
-    listener: TcpListener,
+    pub db: Db,
+    pub listener: TcpListener,
     pub notify_shutdown: broadcast::Sender<()>,
     pub shutdown_complete_rx: mpsc::Receiver<()>,
     pub shutdown_complete_tx: mpsc::Sender<()>,
 }
 
 impl Listener {
-    pub fn new(listener: TcpListener, notify_shutdown: broadcast::Sender<()>, shutdown_complete_tx: mpsc::Sender<()>, shutdown_complete_rx: mpsc::Receiver<()>) -> Listener {
+    pub fn new(
+        listener: TcpListener,
+        notify_shutdown: broadcast::Sender<()>,
+        shutdown_complete_tx: mpsc::Sender<()>,
+        shutdown_complete_rx: mpsc::Receiver<()>,
+    ) -> Listener {
         Listener {
             listener,
             db: Db::new(),

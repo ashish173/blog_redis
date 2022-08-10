@@ -1,33 +1,114 @@
-use tokio::{net::TcpStream, sync::{broadcast, mpsc}, stream};
-use crate::Db;
+use std::io::ErrorKind;
+
+use crate::{helper::buffer_to_array, Command};
+use crate::{Db, Listener};
+use bytes::BytesMut;
+use tokio::io::AsyncWriteExt;
+use tokio::{
+    io::AsyncReadExt,
+    net::TcpStream,
+    sync::{broadcast, mpsc},
+};
 
 pub struct Handler {
-    pub stream: TcpStream,
+    pub connection: Connection,
     pub db: Db,
-    pub notify: broadcast::Receiver<()>,
-    pub shutdown: bool,
-    // _shutdown_complete: mpsc::Sender<()>,
+    pub shutdown: Shutdown,
+    // when the handler object is dropped, this sends a message to the receiver
+    _shutdown_complete: mpsc::Sender<()>,
+}
+
+pub struct Connection {
+    pub stream: TcpStream,
+}
+
+pub struct Shutdown {
+    shutdown: bool,
+    notify: broadcast::Receiver<()>,
+}
+
+impl Connection {
+    fn new(stream: TcpStream) -> Connection {
+        Connection { stream: stream }
+    }
+
+    pub async fn read_frame(&mut self) -> Result<(Command, Vec<String>), std::io::Error> {
+        std::thread::sleep(std::time::Duration::from_millis(5000));
+        let mut buf = BytesMut::with_capacity(1024);
+        self.stream.read_buf(&mut buf).await?;
+        let attrs = buffer_to_array(&mut buf);
+        Ok((Command::get_command(&attrs[0]), attrs))
+    }
+}
+
+impl Shutdown {
+    fn new(shutdown: bool, notify: broadcast::Receiver<()>) -> Shutdown {
+        Shutdown { shutdown, notify }
+    }
+
+    pub async fn listen_recv(&mut self) -> Result<(), tokio::sync::broadcast::error::RecvError> {
+        println!("inside Listen_recv");
+
+        self.notify.recv().await?; // returns error of type `tokio::sync::broadcast::error::RecvError`
+        self.shutdown = true;
+        Ok(())
+    }
+
+    pub fn is_shutdown(&self) -> bool {
+        self.shutdown
+    }
 }
 
 impl Handler {
-    pub fn new(stream:TcpStream, db: &Db, notify: broadcast::Receiver<()>) -> Handler {
+    pub fn new(listener: &Listener, socket: TcpStream) -> Handler {
         Handler {
-            stream,
-            db: db.clone(),
-            notify,
-            shutdown: false,
-
+            connection: Connection::new(socket),
+            db: listener.db.clone(),
+            shutdown: Shutdown::new(false, listener.notify_shutdown.subscribe()),
+            _shutdown_complete: listener.shutdown_complete_tx.clone(),
         }
     }
 
-    pub async fn listen_recv(&mut self) {
-        if self.shutdown {
-            return;
+    pub async fn process_query(
+        &mut self,
+        command: Command,
+        attrs: Vec<String>,
+    ) -> Result<(), std::io::Error> {
+        let connection = &mut self.connection;
+        let db = &self.db;
 
+        match command {
+            Command::Get => {
+                let result = db.read(&attrs);
+                // entries.lock().unwrap().get(k);
+                match result {
+                    Ok(result) => {
+                        connection.stream.write_all(&result).await?;
+                    }
+                    Err(_err) => {
+                        connection.stream.write_all(b"").await?;
+                    }
+                }
+
+                return Ok(());
+            }
+            Command::Set => {
+                let resp = db.write(&attrs);
+                match resp {
+                    Ok(result) => {
+                        connection.stream.write_all(&result.as_bytes()).await?;
+                    }
+                    Err(_err) => {
+                        connection.stream.write_all(b"").await?;
+                    }
+                }
+
+                return Ok(());
+            }
+            Command::Invalid => {
+                connection.stream.write_all(b"invalid command").await?;
+                Err(std::io::Error::from(ErrorKind::InvalidData))
+            }
         }
-        println!("inside Listen_recv");
-        self.notify.recv().await;
-        self.shutdown = true;
-    } 
-    
+    }
 }
