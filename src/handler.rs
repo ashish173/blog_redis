@@ -32,12 +32,23 @@ impl Connection {
         Connection { stream: stream }
     }
 
-    pub async fn read_frame(&mut self) -> Result<(Command, Vec<String>), std::io::Error> {
-        std::thread::sleep(std::time::Duration::from_millis(5000));
+    pub async fn read_frame(&mut self) -> Option<(Command, Vec<String>)> {
+        std::thread::sleep(std::time::Duration::from_millis(1000));
         let mut buf = BytesMut::with_capacity(1024);
-        self.stream.read_buf(&mut buf).await?;
+        match self.stream.read_buf(&mut buf).await {
+            Ok(size) => {
+                if size == 0 {
+                    println!("returning from empty buffer");
+                    return None;
+                }
+            }
+            Err(err) => {
+                println!("error {:?}", err);
+                return None;
+            }
+        };
         let attrs = buffer_to_array(&mut buf);
-        Ok((Command::get_command(&attrs[0]), attrs))
+        Some((Command::get_command(&attrs[0]), attrs))
     }
 }
 
@@ -48,9 +59,12 @@ impl Shutdown {
 
     pub async fn listen_recv(&mut self) -> Result<(), tokio::sync::broadcast::error::RecvError> {
         println!("inside Listen_recv");
+        // println!("SHUTDOWN message WAITING");
 
         self.notify.recv().await?; // returns error of type `tokio::sync::broadcast::error::RecvError`
-        self.shutdown = true;
+
+        // println!("SHUTDOWN message received from server");
+        // self.shutdown = true;
         Ok(())
     }
 

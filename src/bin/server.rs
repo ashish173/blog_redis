@@ -1,3 +1,5 @@
+use std::future::Future;
+
 use blog_redis::server;
 use blog_redis::Listener;
 use tokio::signal;
@@ -19,6 +21,7 @@ pub async fn main() -> Result<(), std::io::Error> {
         shutdown_complete_tx,
         shutdown_complete_rx,
     );
+
     tokio::select! {
         res = server::run(&mut listener) => {
              if let Err(_err) = res {
@@ -29,10 +32,11 @@ pub async fn main() -> Result<(), std::io::Error> {
             println!("inside shutdown loop");
         }
     }
-    drop(listener.notify_shutdown);
-    drop(listener.shutdown_complete_tx);
-    println!("before final shutdown");
-    let _ = listener.shutdown_complete_rx.recv().await;
+
+    // drop(listener.notify_shutdown);
+    // drop(listener.shutdown_complete_tx);
+    // println!("before final shutdown");
+    // let _ = listener.shutdown_complete_rx.recv().await;
     println!("after final shutdown");
 
     Ok(())

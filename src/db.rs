@@ -28,8 +28,8 @@ impl Db {
             .insert(String::from(key), Bytes::from(val));
 
         match p {
-            Some(p) => Ok("r Ok"), // if they key was already present
-            None => Ok("Ok"),      // if the key was not present
+            Some(_p) => Ok("r Ok"), // if they key was already present
+            None => Ok("Ok"),       // if the key was not present
         }
     }
 
