@@ -32,13 +32,12 @@ impl Connection {
         Connection { stream: stream }
     }
 
-    pub async fn read_frame(&mut self) -> Option<(Command, Vec<String>)> {
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+    pub async fn read_buf_data(&mut self) -> Option<(Command, Vec<String>)> {
         let mut buf = BytesMut::with_capacity(1024);
         match self.stream.read_buf(&mut buf).await {
             Ok(size) => {
                 if size == 0 {
-                    println!("returning from empty buffer");
+                    // returning from empty buffer
                     return None;
                 }
             }
@@ -58,13 +57,8 @@ impl Shutdown {
     }
 
     pub async fn listen_recv(&mut self) -> Result<(), tokio::sync::broadcast::error::RecvError> {
-        println!("inside Listen_recv");
-        // println!("SHUTDOWN message WAITING");
-
         self.notify.recv().await?; // returns error of type `tokio::sync::broadcast::error::RecvError`
-
-        // println!("SHUTDOWN message received from server");
-        // self.shutdown = true;
+        self.shutdown = true;
         Ok(())
     }
 
@@ -94,7 +88,6 @@ impl Handler {
         match command {
             Command::Get => {
                 let result = db.read(&attrs);
-                // entries.lock().unwrap().get(k);
                 match result {
                     Ok(result) => {
                         connection.stream.write_all(&result).await?;
